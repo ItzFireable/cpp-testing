@@ -1,20 +1,50 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
-#include <glad/glad.h>
+#include <SDL3_ttf/SDL_ttf.h>
+
 #include <iostream>
 
-#include <state.h>
+#include <utils/AudioManager.h>
+#include <utils/Variables.h>
 
-State *state = NULL;
+#include <BaseState.h>
+#include <states/SongSelectState.h>
+#include <states/PlayState.h>
+#include <objects/FPSCounter.h>
+
+BaseState *state = NULL;
+void* statePayload = nullptr;
+
 int curState = -1;
-int prevState = -1; 
+int prevState = -1;
 
-struct AppContext
+Uint64 lastInputTick = 0;
+float currentInputLatencyMs = 0.0f;
+
+Uint64 TARGET_TICK_DURATION = SDL_GetPerformanceFrequency() / FRAMERATE_CAP;
+const char* FPS_FONT_PATH = "assets/fonts/GoogleSansCode-Bold.ttf";
+
+BaseState *createState(int stateID)
 {
-    SDL_Window *window;
-    SDL_GLContext glContext;
-    SDL_AppResult appQuit = SDL_APP_CONTINUE;
-};
+    switch (stateID)
+    {
+    case STATE_SONG_SELECT:
+        return new SongSelectState();
+    case STATE_PLAY:
+        return new PlayState();
+    default:
+        return nullptr;
+    }
+}
+
+void setState(int stateID, void* payload)
+{
+    if (stateID >= 0 && stateID < STATE_COUNT)
+    {
+        curState = stateID;
+        statePayload = payload;
+    }
+}
 
 SDL_AppResult SDL_Fail()
 {
@@ -24,40 +54,52 @@ SDL_AppResult SDL_Fail()
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
+    Logger::getInstance().setLogLevel(LogLevel::GAME_DEBUG);
+    GAME_LOG_INFO("Logger initialized.");
+
     if (!SDL_Init(SDL_INIT_VIDEO))
     {
-        std::cout << "Failed to load video, quitting..." << std::endl;
+        GAME_LOG_ERROR("Failed to initialize SDL: " + std::string(SDL_GetError()));
         return SDL_Fail();
     }
 
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 2);
+    if (TTF_Init() == -1) {
+        GAME_LOG_ERROR("Failed to initialize SDL_ttf: " + std::string(SDL_GetError()));
+        return SDL_Fail();
+    }
 
-    SDL_Window *window = SDL_CreateWindow("SDL3, OpenGL 4.6, C++", 1280, 720, SDL_WINDOW_OPENGL | SDL_WINDOW_BORDERLESS);
+    char *title = (char *)malloc(256);
+    snprintf(title, 256, "%s v%s", GAME_NAME, GAME_VERSION);
+
+    SDL_Window *window = SDL_CreateWindow(title, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_OPENGL);
     if (!window)
     {
+        GAME_LOG_ERROR("Failed to create SDL window: " + std::string(SDL_GetError()));
         return SDL_Fail();
     }
 
-    SDL_GLContext glContext = SDL_GL_CreateContext(window);
-    if (!glContext)
+    auto *app = (AppContext *)SDL_malloc(sizeof(AppContext));
+    *appstate = app;
+
+    app->window = window;
+    app->renderer = SDL_CreateRenderer(window, NULL);
+    app->fpsCounter = new FPSCounter(app->renderer, FPS_FONT_PATH, 12);
+
+    app->switchState = setState;
+
+    if (!app->renderer)
     {
+        GAME_LOG_ERROR("Failed to create SDL renderer: " + std::string(SDL_GetError()));
         return SDL_Fail();
     }
 
-    if (!gladLoadGL())
-    {
-        std::cout << "Failed to load OpenGL functions, quitting..." << std::endl;
-        return SDL_APP_FAILURE;
-    }
-
-    glClearColor(0.f, 0.5f, 0.5f, 1.f);
+    SDL_SetRenderDrawColor(app->renderer, 0, 0, 0, 255);
     SDL_ShowWindow(window);
 
-    *appstate = new AppContext {
-        window,
-        glContext,
-    };
+    if (!AudioManager::getInstance().initialize()) {
+        GAME_LOG_ERROR("Failed to initialize AudioManager.");
+        return SDL_Fail();
+    }
 
     return SDL_APP_CONTINUE;
 }
@@ -65,22 +107,21 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 {
     auto *app = (AppContext *)appstate;
-    if (state != nullptr)
-    {
-        state->handleEvent(*event);
-    }
 
     switch (event->type)
     {
-        case SDL_EVENT_QUIT:
+    case SDL_EVENT_QUIT:
+    {
+        app->appQuit = SDL_APP_SUCCESS;
+        break;
+    }
+    default:
+    {
+        if (state != nullptr)
         {
-            app->appQuit = SDL_APP_SUCCESS;
-            break;
+            state->handleEvent(*event);
         }
-        default:
-        {
-            break;
-        }
+    }
     }
 
     return SDL_APP_CONTINUE;
@@ -91,7 +132,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     auto *app = (AppContext *)appstate;
 
     if (curState < 0)
-        curState = 0;
+        curState = STATE_SONG_SELECT;
 
     if (curState != prevState)
     {
@@ -99,27 +140,66 @@ SDL_AppResult SDL_AppIterate(void *appstate)
         {
             state->destroy();
             delete state;
+            state = nullptr;
         }
-        
-        state = new State();
-        state->init();
+
+        state = createState(curState);
         prevState = curState;
 
-        std::cout << "Initialized state: " << state->getName() << std::endl;
+        if (state != nullptr)
+        {
+            if (app->renderer == nullptr)
+            {
+                GAME_LOG_ERROR("Renderer is null during state initialization.");
+                return SDL_APP_FAILURE;
+            }
+
+            state->init(app, statePayload);
+            statePayload = nullptr;
+        }
     }
 
-    // Variable to see if state is valid
-    bool stateValid = (state != nullptr);
-    glClear(GL_COLOR_BUFFER_BIT);
+    Uint64 frameStartTime = SDL_GetPerformanceCounter();
+    
+    if (app->renderer != nullptr)
+    {
+        AudioManager::getInstance().updateStream();
 
-    if (stateValid) {
-        state->update();
-    }
+        if (app->fpsCounter) {
+            app->fpsCounter->update();
+        }
 
-    SDL_GL_SwapWindow(app->window);
+        SDL_RenderClear(app->renderer);
 
-    if (stateValid) {
-        state->postBuffer();
+        if (state != nullptr)
+        {
+            state->update();
+            state->postBuffer();
+        }
+
+        if (app->fpsCounter) {
+            app->fpsCounter->render();
+        }
+
+        SDL_RenderPresent(app->renderer);
+
+        Uint64 frameEndTime = SDL_GetPerformanceCounter();
+        Uint64 frameDurationTicks = frameEndTime - frameStartTime;
+
+        if (frameDurationTicks < TARGET_TICK_DURATION)
+        {
+            Uint64 waitTicks = TARGET_TICK_DURATION - frameDurationTicks;
+            
+            float waitTimeMs = (float)waitTicks * 1000.0f / (float)SDL_GetPerformanceFrequency();
+            float pollingMarginMs = 0.5f; 
+
+            if (waitTimeMs > pollingMarginMs) {
+                SDL_Delay((Uint32)(waitTimeMs - pollingMarginMs));
+            }
+
+            Uint64 finalWaitEnd = frameStartTime + TARGET_TICK_DURATION;
+            while (SDL_GetPerformanceCounter() < finalWaitEnd) { } 
+        }
     }
 
     return app->appQuit;
@@ -127,13 +207,27 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 
 void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
+    if (state != nullptr)
+    {
+        state->destroy();
+        delete state;
+        state = nullptr;
+    }
+
+    Logger::getInstance().shutdown();
+
     auto *app = (AppContext *)appstate;
     if (app)
     {
-        SDL_GL_DestroyContext(app->glContext);
+        if (app->fpsCounter) {
+            delete app->fpsCounter;
+            app->fpsCounter = nullptr;
+        }
+        SDL_DestroyRenderer(app->renderer);
         SDL_DestroyWindow(app->window);
         delete app;
     }
 
+    TTF_Quit();
     SDL_Quit();
 }
