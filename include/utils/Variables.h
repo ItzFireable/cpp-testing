@@ -1,11 +1,15 @@
 #pragma once
 
-#include <SDL3/SDL.h>
+#include <GLFW/glfw3.h>
+#include <GL/glew.h>
+#include <chrono>
+#include <TextureLoader.h>
+#include <SpriteBatch.h>
+
 #include <utils/Logger.h>
 #include <utils/AudioManager.h>
 #include <objects/FPSCounter.h>
 #include <objects/DebugInfo.h>
-
 #include <rhythm/ChartManager.h>
 
 #define GAME_NAME "?"
@@ -25,15 +29,34 @@ extern int WINDOW_HEIGHT;
 
 inline const std::string MAIN_FONT_PATH = "assets/fonts/GoogleSansCode-Bold.ttf";
 
-extern Uint64 lastInputTick;
-extern Uint64 lastFrameTick;
-extern float currentInputLatencyMs;
-extern Uint64 TARGET_TICK_DURATION;
+using Clock = std::chrono::high_resolution_clock;
+using TimePoint = std::chrono::time_point<Clock>;
 
-#define KEYBIND_STRUM_LEFT SDLK_Z
-#define KEYBIND_STRUM_DOWN SDLK_X
-#define KEYBIND_STRUM_UP SDLK_COMMA
-#define KEYBIND_STRUM_RIGHT SDLK_PERIOD
+extern TimePoint lastInputTime;
+extern TimePoint lastFrameTime;
+extern double currentInputLatencyMs;
+
+inline int glfwKeyToSDL(int glfwKey) {
+    switch (glfwKey) {
+        case GLFW_KEY_Z: return SDLK_Z;
+        case GLFW_KEY_X: return SDLK_X;
+        case GLFW_KEY_COMMA: return SDLK_COMMA;
+        case GLFW_KEY_PERIOD: return SDLK_PERIOD;
+        case GLFW_KEY_ESCAPE: return SDLK_ESCAPE;
+        case GLFW_KEY_ENTER: return SDLK_RETURN;
+        case GLFW_KEY_SPACE: return SDLK_SPACE;
+        case GLFW_KEY_LEFT: return SDLK_LEFT;
+        case GLFW_KEY_RIGHT: return SDLK_RIGHT;
+        case GLFW_KEY_UP: return SDLK_UP;
+        case GLFW_KEY_DOWN: return SDLK_DOWN;
+        default: return glfwKey;
+    }
+}
+
+#define KEYBIND_STRUM_LEFT GLFW_KEY_Z
+#define KEYBIND_STRUM_DOWN GLFW_KEY_X
+#define KEYBIND_STRUM_UP GLFW_KEY_COMMA
+#define KEYBIND_STRUM_RIGHT GLFW_KEY_PERIOD
 
 class FPSCounter; 
 class DebugInfo;
@@ -51,17 +74,19 @@ struct PlayStateData
 
 struct AppContext
 {
-    SDL_Window *window;
-    SDL_Renderer *renderer;
-    SDL_Texture *renderTarget;
-    SDL_AppResult appQuit = SDL_APP_CONTINUE;
+    GLFWwindow* window;
+    GLuint renderTarget;
+    GLuint renderTexture;
+    bool appQuit = false;
 
     AudioManager& audioManager = AudioManager::getInstance();
     FPSCounter* fpsCounter = nullptr;
     DebugInfo* debugInfo = nullptr;
 
     StateSwitcher switchState = nullptr;
-    BaseState *currentState = nullptr;
+    BaseState* currentState = nullptr;
+
+    SpriteBatch* spriteBatch = nullptr;
     
     float renderWidth = 1920.0f;
     float renderHeight = 1080.0f;

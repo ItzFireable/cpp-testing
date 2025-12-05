@@ -1,11 +1,9 @@
-#ifndef TEXT_OBJECT_H
-#define TEXT_OBJECT_H
+#ifndef TEXTOBJECT_H
+#define TEXTOBJECT_H
 
-#include <SDL3/SDL.h>
-#include <SDL3_ttf/SDL_ttf.h>
 #include <string>
-#include <iostream>
-#include <algorithm>
+#include <glm/glm.hpp>
+#include "TextRenderer.h"
 
 enum TextXAlignment {
     ALIGN_LEFT,
@@ -27,60 +25,54 @@ enum TextAlignment {
 
 class TextObject {
 public:
-    TextObject(SDL_Renderer* renderer, const std::string& fontPath, int fontSize);
-    
+    TextObject(TextRenderer* renderer, int fontSize);
     ~TextObject();
 
     void setText(const std::string& newText);
     void setPosition(int x, int y);
-    void setColor(SDL_Color color);
-    void render();
+    void setColor(glm::vec4 color);
+    void render(float screenWidth, float screenHeight);
 
     void getPosition(float& x, float& y) const {
-        x = destRect_.x;
-        y = destRect_.y;
+        x = renderX_;
+        y = renderY_;
     }
 
     float getTextGap() const { return textGap_; }
-    float getLineCount() const {
-        if (text_.empty()) {
-            return 0.0f;
-        }
-        return static_cast<float>(std::count(text_.begin(), text_.end(), '\n') + 1);
-    }
+    float getLineCount() const;
 
     void setTextGap(float gap);
     void setAlignment(TextAlignment alignment);
-
     void setXAlignment(TextXAlignment alignment);
     void setYAlignment(TextYAlignment alignment);
 
-    float getRenderedWidth() const { return destRect_.w; }
-    float getRenderedHeight() const { return destRect_.h; }
+    float getRenderedWidth() const { return cachedWidth_; }
+    float getRenderedHeight() const { return cachedHeight_; }
+
 private:
-    SDL_Renderer* renderer_ = nullptr;
-    TTF_Font* font_ = nullptr;
-    SDL_Texture* texture_ = nullptr;
+    TextRenderer* renderer_;
+    int fontSize_;
+    float scale_;
 
-    std::string text_ = "";
-    SDL_Color color_ = {255, 255, 255, 255};
+    std::string text_;
+    glm::vec4 color_;
 
-    SDL_FRect destRect_ = {0, 0, 0, 0};
+    TextXAlignment alignmentX_;
+    TextYAlignment alignmentY_;
+    TextAlignment textAlignment_;
 
-    TextXAlignment alignmentX_ = ALIGN_LEFT;
-    TextYAlignment alignmentY_ = ALIGN_TOP;
+    float anchorX_;
+    float anchorY_;
+    float renderX_;
+    float renderY_;
+    float textGap_;
 
-    TextAlignment textAlignment_ = TEXT_ALIGN_LEFT;
+    float cachedWidth_;
+    float cachedHeight_;
 
-    float anchorX_ = 0.0f;
-    float anchorY_ = 0.0f;
-    float textGap_ = 0.0f;
-
-    bool _loadFont(const std::string& path, int size);
-    bool _updateFontStyle();
-    void _destroyTexture();
-    void _updateTexture();
-    void _updatePosition();
+    void updateDimensions();
+    void updatePosition();
+    std::string alignTextLines(const std::string& text);
 };
 
 #endif

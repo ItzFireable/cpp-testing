@@ -8,8 +8,6 @@
 #include <utils/Utils.h>
 #include <string>
 #include <memory>
-#include <SDL3/SDL.h>
-#include <SDL3_image/SDL_image.h>
 #include <rhythm/JudgementSystem.h>
 #include <objects/ConductorInfo.h>
 #include <rhythm/GameplayHud.h>
@@ -40,7 +38,7 @@ private:
     Playfield* playfield_ = nullptr;
     std::unique_ptr<JudgementSystem> judgementSystem_;
     
-    SDL_Texture* backgroundTexture_;
+    GLuint* backgroundTexture_ = 0;
     ConductorInfo* conductorInfo_ = nullptr;
     GameplayHud* gameplayHud_ = nullptr;
 

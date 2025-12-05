@@ -49,17 +49,7 @@ void PlayState::init(AppContext *appContext, void *payload)
     if (!bgName.empty())
     {
         std::string bgPath = chartData_.filePath + "/" + bgName;
-        backgroundTexture_ = IMG_LoadTexture(renderer, bgPath.c_str());
-
-        if (!backgroundTexture_)
-        {
-            GAME_LOG_ERROR("PlayState: Failed to load background image: " + bgPath);
-            backgroundTexture_ = nullptr;
-        }
-        else
-        {
-            SDL_SetTextureColorMod(backgroundTexture_, 77, 77, 77);
-        }
+        backgroundTexture_ = TextureLoader::loadTexture(bgPath);
     }
 
     DebugInfo* debugInfo = appContext->debugInfo;
@@ -189,7 +179,13 @@ void PlayState::render()
 {
     if (backgroundTexture_)
     {
-        SDL_RenderTexture(renderer, backgroundTexture_, nullptr, nullptr);
+        appContext->spriteBatch->drawTexture(
+            backgroundTexture_, 
+            0.0f, 0.0f, 
+            (float)appContext->renderWidth,
+            (float)appContext->renderHeight,
+            glm::vec4(1.0f)
+        );
     }
     if (playfield_) { playfield_->render(renderer);}
     if (conductorInfo_) { conductorInfo_->render(renderer);}
@@ -233,7 +229,7 @@ void PlayState::destroy()
 
     if (backgroundTexture_) 
     {
-        SDL_DestroyTexture(backgroundTexture_);
-        backgroundTexture_ = nullptr;
+        glDeleteTextures(1, &backgroundTexture_);
+        backgroundTexture_ = 0;
     }
 }

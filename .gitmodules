@@ -1,12 +1,15 @@
-[submodule "vendored/SDL"]
-	path = vendored/SDL
-	url = https://github.com/libsdl-org/SDL
-[submodule "vendored/SDL_ttf"]
-	path = vendored/SDL_ttf
-	url = https://github.com/libsdl-org/SDL_ttf
 [submodule "vendored/openal-soft"]
 	path = vendored/openal-soft
 	url = https://github.com/kcat/openal-soft
-[submodule "vendored/SDL_image"]
-	path = vendored/SDL_image
-	url = https://github.com/libsdl-org/SDL_image
+[submodule "vendored/glfw"]
+	path = vendored/glfw
+	url = https://github.com/glfw/glfw
+[submodule "vendored/glm"]
+	path = vendored/glm
+	url = https://github.com/g-truc/glm
+[submodule "vendored/freetype"]
+	path = vendored/freetype
+	url = https://github.com/freetype/freetype
+[submodule "vendored/FreeImage"]
+	path = vendored/FreeImage
+	url = https://github.com/dllsystem/FreeImage

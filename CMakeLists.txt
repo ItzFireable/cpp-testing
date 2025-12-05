@@ -35,14 +35,62 @@ target_include_directories(app PRIVATE vendored/include)
 target_include_directories(app PRIVATE include)
 
 if(USE_VENDORED)
-    set(SDLTTF_VENDORED ON)
+    set(FREEIMAGE_DIR "${CMAKE_SOURCE_DIR}/vendored/FreeImage")
+    set(GLEW_DIR "${CMAKE_SOURCE_DIR}/vendored/glew")
+
+    if(WIN32 AND CMAKE_GENERATOR MATCHES "MinGW")
+        set(MAKE_CMD "mingw32-make")
+    elseif(WIN32 AND CMAKE_GENERATOR MATCHES "NMake")
+        set(MAKE_CMD "nmake")
+    else()
+        set(MAKE_CMD "make")
+    endif()
+
+    add_custom_target(FreeImage_Build
+        COMMAND ${MAKE_CMD}
+        WORKING_DIRECTORY ${FREEIMAGE_DIR}
+        COMMENT "Building FreeImage static library"
+        USES_TERMINAL
+    )
+
+    add_custom_target(GLEW_Build
+        COMMAND ${MAKE_CMD} all 
+        WORKING_DIRECTORY ${GLEW_DIR}
+        COMMENT "Building GLEW static library"
+        USES_TERMINAL
+    )
+
+    if(WIN32)
+        set(FREEIMAGE_LIB_PATH "${FREEIMAGE_DIR}/Dist/FreeImage.lib")
+        set(GLEW_LIB_PATH "${GLEW_DIR}/lib/Release/x64/glew32s.lib")
+        target_compile_definitions(app PRIVATE GLEW_STATIC)
+    else()
+        set(FREEIMAGE_LIB_PATH "${FREEIMAGE_DIR}/libfreeimage.a")
+        set(GLEW_LIB_PATH "${GLEW_DIR}/lib/libglew.a")
+    endif()
     
-    add_subdirectory(vendored/SDL EXCLUDE_FROM_ALL)
-    add_subdirectory(vendored/SDL_ttf EXCLUDE_FROM_ALL)
-    add_subdirectory(vendored/SDL_image EXCLUDE_FROM_ALL)
+    add_library(FreeImage STATIC IMPORTED)
+    set_property(TARGET FreeImage PROPERTY IMPORTED_LOCATION ${FREEIMAGE_LIB_PATH})
+
+    add_library(GLEW::GLEW STATIC IMPORTED)
+    set_property(TARGET GLEW::GLEW PROPERTY IMPORTED_LOCATION ${GLEW_LIB_PATH})
     
-    # Use prebuilt OpenAL instead of building from source
-    # Place OpenAL32.dll in project root or vendored/openal-soft/
+    set_property(TARGET FreeImage PROPERTY INTERFACE_INCLUDE_DIRECTORIES 
+        ${FREEIMAGE_DIR}/Source 
+        ${FREEIMAGE_DIR}/Wrapper/FreeImagePlus
+    )
+
+    set_property(TARGET GLEW::GLEW PROPERTY INTERFACE_INCLUDE_DIRECTORIES 
+        ${GLEW_DIR}/include 
+    )
+
+    add_dependencies(app FreeImage_Build)
+    add_dependencies(app GLEW_Build)
+    target_link_libraries(app PRIVATE FreeImage GLEW::GLEW)
+
+    add_subdirectory(vendored/glfw EXCLUDE_FROM_ALL)
+    add_subdirectory(vendored/freetype EXCLUDE_FROM_ALL)
+    
     find_library(OPENAL_LIBRARY 
         NAMES OpenAL32 
         PATHS ${CMAKE_SOURCE_DIR}/vendored/openal-soft
@@ -63,20 +111,24 @@ if(USE_VENDORED)
         set(OPENAL_TARGET OpenAL_prebuilt)
     endif()
 
-    target_include_directories(app PRIVATE vendored/SDL_ttf/include)
-    target_include_directories(app PRIVATE vendored/SDL_image/include)
-    target_include_directories(app PRIVATE vendored/openal-soft/include)
+    target_include_directories(app PRIVATE 
+        vendored/glfw/include
+        vendored/glm
+        vendored/freetype/include
+        vendored/FreeImage/Source
+        vendored/openal-soft/include
+    )
 
     target_link_libraries(app PRIVATE 
-        SDL3::SDL3
-        SDL3_ttf::SDL3_ttf
-        SDL3_image::SDL3_image
+        glfw
+        glm
+        freetype
     )
-    
-    # Link OpenAL last
-    target_link_libraries(app PRIVATE ${OPENAL_TARGET})
 
-    # CRITICAL: Copy OpenAL DLL to executable directory after build
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(app PRIVATE OpenGL::GL)
+    
+    target_link_libraries(app PRIVATE ${OPENAL_TARGET})
     add_custom_command(TARGET app POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         $<TARGET_FILE:OpenAL>
@@ -85,18 +137,27 @@ if(USE_VENDORED)
     )
 
 else()
-    find_package(SDL3 REQUIRED)
-    find_package(SDL3_ttf REQUIRED)
-    find_package(SDL3_image REQUIRED)
+    find_package(glfw3 REQUIRED)
+    find_package(GLEW REQUIRED)
+    find_package(glm REQUIRED)
+    find_package(Freetype REQUIRED)
+    find_package(FreeImage REQUIRED)
+    find_package(OpenGL REQUIRED)
     find_package(OpenAL REQUIRED)
 
-    target_include_directories(app PRIVATE ${SDL3_TTF_INCLUDE_DIR})
-    target_include_directories(app PRIVATE ${SDL3_IMAGE_INCLUDE_DIR})
-    target_include_directories(app PRIVATE ${OPENAL_INCLUDE_DIR})
+    target_include_directories(app PRIVATE 
+        ${GLEW_INCLUDE_DIRS}
+        ${FREETYPE_INCLUDE_DIRS}
+        ${FREEIMAGE_INCLUDE_DIRS}
+    )
 
     target_link_libraries(app PRIVATE 
-        SDL3::SDL3
-        SDL3_ttf::SDL3_ttf 
+        glfw
+        GLEW::GLEW
+        glm::glm
+        Freetype::Freetype
+        FreeImage::FreeImage
+        OpenGL::GL
         OpenAL::OpenAL
     )
 endif()
@@ -112,7 +173,16 @@ target_link_libraries(app PRIVATE
     pthread
 )
 
-# Print diagnostic information
+if(WIN32)
+    target_link_libraries(app PRIVATE opengl32)
+elseif(APPLE)
+    find_library(OPENGL_LIBRARY OpenGL)
+    target_link_libraries(app PRIVATE ${OPENGL_LIBRARY})
+else()
+    target_link_libraries(app PRIVATE GL)
+endif()
+
+
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Executable will be in: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)

@@ -1,249 +1,206 @@
 #include "objects/TextObject.h"
-#include "utils/Logger.h"
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_render.h>
-
-#include <vector>
+#include <algorithm>
 #include <sstream>
+#include <vector>
 
-std::vector<std::string> splitStringByNewlines(const std::string& s) {
-    std::vector<std::string> lines;
-    std::stringstream ss(s);
-    std::string line;
-    
-    while (std::getline(ss, line, '\n')) {
-        lines.push_back(line);
-    }
-    
-    if (s.length() > 0 && s.back() == '\n') {
-        lines.push_back("");
-    }
-    
-    return lines;
-}
-
-TextObject::TextObject(SDL_Renderer* renderer, const std::string& fontPath, int fontSize) 
-    : renderer_(renderer) 
+TextObject::TextObject(TextRenderer* renderer, int fontSize)
+    : renderer_(renderer)
+    , fontSize_(fontSize)
+    , scale_(1.0f)
+    , color_(1.0f, 1.0f, 1.0f, 1.0f)
+    , alignmentX_(ALIGN_LEFT)
+    , alignmentY_(ALIGN_TOP)
+    , textAlignment_(TEXT_ALIGN_LEFT)
+    , anchorX_(0.0f)
+    , anchorY_(0.0f)
+    , renderX_(0.0f)
+    , renderY_(0.0f)
+    , textGap_(0.0f)
+    , cachedWidth_(0.0f)
+    , cachedHeight_(0.0f)
 {
-    if (!_loadFont(fontPath, fontSize)) {
-        GAME_LOG_ERROR("Failed to load font from path: " + fontPath);
-    }
 }
 
 TextObject::~TextObject() {
-    _destroyTexture();
-    if (font_) {
-        TTF_CloseFont(font_);
-        font_ = nullptr;
-    }
 }
 
 void TextObject::setText(const std::string& newText) {
     if (text_ != newText) {
         text_ = newText;
-        _updateTexture();
+        updateDimensions();
+        updatePosition();
     }
 }
 
 void TextObject::setPosition(int x, int y) {
-    anchorX_ = x;
-    anchorY_ = y;
-    _updatePosition();
+    anchorX_ = (float)x;
+    anchorY_ = (float)y;
+    updatePosition();
 }
 
-void TextObject::setColor(SDL_Color color) {
-    if (color_.r != color.r || color_.g != color.g || color_.b != color.b || color_.a != color.a) {
-        color_ = color;
-        _updateTexture();
-    }
+void TextObject::setColor(glm::vec4 color) {
+    color_ = color;
 }
 
 void TextObject::setAlignment(TextAlignment alignment) {
     if (textAlignment_ != alignment) {
         textAlignment_ = alignment;
-        _updatePosition();
+        updateDimensions();
+        updatePosition();
     }
 }
 
 void TextObject::setXAlignment(TextXAlignment alignment) {
     if (alignmentX_ != alignment) {
         alignmentX_ = alignment;
-        _updatePosition();
+        updatePosition();
     }
 }
 
 void TextObject::setYAlignment(TextYAlignment alignment) {
     if (alignmentY_ != alignment) {
         alignmentY_ = alignment;
-        _updatePosition();
+        updatePosition();
     }
-}
-
-void TextObject::render() {
-    if (texture_ && renderer_) {
-        SDL_RenderTexture(renderer_, texture_, NULL, &destRect_);
-    }
-}
-
-bool TextObject::_loadFont(const std::string& path, int size) {
-    if (font_) TTF_CloseFont(font_);
-    
-    font_ = TTF_OpenFont(path.c_str(), size);
-    if (!font_) {
-        return false;
-    }
-
-    TTF_SetFontHinting(font_, TTF_HINTING_LIGHT_SUBPIXEL);
-    return true;
 }
 
 void TextObject::setTextGap(float gap) {
     if (textGap_ != gap) {
         textGap_ = gap;
-        _updateTexture();
+        updateDimensions();
+        updatePosition();
     }
 }
 
-void TextObject::_destroyTexture() {
-    if (texture_) {
-        SDL_DestroyTexture(texture_);
-        texture_ = nullptr;
+float TextObject::getLineCount() const {
+    if (text_.empty()) {
+        return 0.0f;
     }
+    return static_cast<float>(std::count(text_.begin(), text_.end(), '\n') + 1);
 }
 
-void TextObject::_updatePosition() {
+void TextObject::updateDimensions() {
+    if (text_.empty() || !renderer_) {
+        cachedWidth_ = 0.0f;
+        cachedHeight_ = 0.0f;
+        return;
+    }
+
+    std::vector<std::string> lines;
+    std::stringstream ss(text_);
+    std::string line;
+    
+    while (std::getline(ss, line, '\n')) {
+        lines.push_back(line);
+    }
+    
+    if (!text_.empty() && text_.back() == '\n') {
+        lines.push_back("");
+    }
+
+    float maxWidth = 0.0f;
+    for (const std::string& l : lines) {
+        if (!l.empty()) {
+            glm::vec2 size = renderer_->measureText(l, scale_);
+            if (size.x > maxWidth) {
+                maxWidth = size.x;
+            }
+        }
+    }
+
+    float lineHeight = renderer_->getLineHeight(scale_);
+    float totalHeight = lineHeight * lines.size() + textGap_ * (lines.size() - 1);
+
+    cachedWidth_ = maxWidth;
+    cachedHeight_ = totalHeight;
+}
+
+void TextObject::updatePosition() {
     switch (alignmentX_) {
         case ALIGN_LEFT:
-            destRect_.x = anchorX_;
+            renderX_ = anchorX_;
             break;
-
         case ALIGN_CENTER:
-            destRect_.x = anchorX_ - (destRect_.w / 2.0f);
+            renderX_ = anchorX_ - (cachedWidth_ / 2.0f);
             break;
-
         case ALIGN_RIGHT:
-            destRect_.x = anchorX_ - destRect_.w;
+            renderX_ = anchorX_ - cachedWidth_;
             break;
     }
 
     switch (alignmentY_) {
         case ALIGN_TOP:
-            destRect_.y = anchorY_;
+            renderY_ = anchorY_;
             break;
-
         case ALIGN_MIDDLE:
-            destRect_.y = anchorY_ - (destRect_.h / 2.0f);
+            renderY_ = anchorY_ - (cachedHeight_ / 2.0f);
             break;
-
         case ALIGN_BOTTOM:
-            destRect_.y = anchorY_ - destRect_.h;
+            renderY_ = anchorY_ - cachedHeight_;
             break;
     }
 }
 
-void TextObject::_updateTexture() {
-    if (!font_ || renderer_ == nullptr || text_.empty()) {
-        destRect_.w = 0.0f;
-        destRect_.h = 0.0f;
+std::string TextObject::alignTextLines(const std::string& text) {
+    if (textAlignment_ == TEXT_ALIGN_LEFT) {
+        return text;
+    }
+
+    std::vector<std::string> lines;
+    std::stringstream ss(text);
+    std::string line;
+    
+    while (std::getline(ss, line, '\n')) {
+        lines.push_back(line);
+    }
+    
+    std::string result;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        result += lines[i];
+        if (i < lines.size() - 1) {
+            result += '\n';
+        }
+    }
+
+    return result;
+}
+
+void TextObject::render(float screenWidth, float screenHeight) {
+    if (text_.empty() || !renderer_) {
         return;
     }
 
-    std::vector<std::string> lines = splitStringByNewlines(text_);
+    std::vector<std::string> lines;
+    std::stringstream ss(text_);
+    std::string line;
     
-    int lineSkip = TTF_GetFontLineSkip(font_);
-    int totalHeight = lineSkip * lines.size();
-    int maxWidth = 0;
-
-    for (const std::string& line : lines) {
-        if (line.empty()) continue;
-        int w, h;
-        TTF_GetStringSize(font_, line.c_str(), line.length(),&w, &h);
-        if (w > maxWidth) {
-            maxWidth = w;
-        }
+    while (std::getline(ss, line, '\n')) {
+        lines.push_back(line);
+    }
+    
+    if (!text_.empty() && text_.back() == '\n') {
+        lines.push_back("");
     }
 
-    SDL_Texture* finalTexture = SDL_CreateTexture(
-        renderer_, 
-        SDL_PIXELFORMAT_RGBA8888, 
-        SDL_TEXTUREACCESS_TARGET, 
-        maxWidth, 
-        totalHeight
-    );
-    
-    if (!finalTexture) {
-        GAME_LOG_ERROR("Failed to create render target texture: " + std::string(SDL_GetError()));
-        destRect_.w = 0.0f; destRect_.h = 0.0f; return;
-    }
+    float lineHeight = renderer_->getLineHeight(scale_);
+    float currentY = renderY_;
+    float maxLineWidth = cachedWidth_;
 
-    SDL_Texture* oldTarget = SDL_GetRenderTarget(renderer_);
-    SDL_SetRenderTarget(renderer_, finalTexture);
+    for (const std::string& l : lines) {
+        float lineX = renderX_;
 
-    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0); 
-    SDL_RenderClear(renderer_);
-
-    float currentY = 0.0f;
-
-    for (size_t i = 0; i < lines.size(); ++i) {
-        const std::string& line = lines[i];
-        
-        if (!line.empty()) {
-            SDL_Surface* tempSurface = TTF_RenderText_Blended(font_, line.c_str(), line.length(), color_);
-            if (!tempSurface) {
-                continue;
-            };
-
-            SDL_Surface* lineSurface = SDL_ConvertSurface(
-                tempSurface, 
-                SDL_PIXELFORMAT_RGBA8888
-            );
-            SDL_DestroySurface(tempSurface);
-            
-            if (!lineSurface) {
-                continue;
-            };
-
-            int lineW = lineSurface->w;
-            int lineH = lineSurface->h; 
-
-            float lineOffsetX = 0.0f;
-            switch (textAlignment_) {
-                case TEXT_ALIGN_CENTER:
-                    lineOffsetX = (maxWidth - lineW) / 2.0f;
-                    break;
-                case TEXT_ALIGN_RIGHT:
-                    lineOffsetX = (maxWidth - lineW);
-                    break;
-                case TEXT_ALIGN_LEFT:
-                default:
-                    lineOffsetX = 0.0f;
-                    break;
+        if (!l.empty()) {
+            if (textAlignment_ == TEXT_ALIGN_CENTER) {
+                glm::vec2 lineSize = renderer_->measureText(l, scale_);
+                lineX = renderX_ + (maxLineWidth - lineSize.x) / 2.0f;
+            } else if (textAlignment_ == TEXT_ALIGN_RIGHT) {
+                glm::vec2 lineSize = renderer_->measureText(l, scale_);
+                lineX = renderX_ + (maxLineWidth - lineSize.x);
             }
 
-            SDL_Texture* lineTexture = SDL_CreateTextureFromSurface(renderer_, lineSurface);
-            SDL_DestroySurface(lineSurface); 
-
-            if (lineTexture) {
-                SDL_FRect lineDest = {
-                    lineOffsetX,               
-                    currentY,           
-                    (float)lineW,
-                    (float)lineH
-                };
-                
-                SDL_RenderTexture(renderer_, lineTexture, NULL, &lineDest);
-                SDL_DestroyTexture(lineTexture);
-            }
+            renderer_->renderText(l, lineX, currentY, scale_, color_, screenWidth, screenHeight);
         }
-        
-        currentY += lineSkip + textGap_;
-    }
 
-    SDL_SetRenderTarget(renderer_, oldTarget);
-    _destroyTexture();
-    texture_ = finalTexture;
-    
-    destRect_.w = (float)maxWidth;
-    destRect_.h = (float)totalHeight;
-    _updatePosition();
+        currentY += lineHeight + textGap_;
+    }
 }
