@@ -88,7 +88,7 @@ private:
 
     SkinUtils* skinUtils_ = nullptr;
 
-    bool useAutoplay_ = true;
+    bool useAutoplay_ = false;
     std::map<int, bool> keysPressed_;
 
     int renderLimit_ = 250;

@@ -1,2 +1,2 @@
 cd output
-cmake --build . --verbose
+cmake --build .
