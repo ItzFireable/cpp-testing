@@ -130,16 +130,27 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
     app->window = window;
     app->renderer = SDL_CreateRenderer(window, NULL);
-    app->fpsCounter = new FPSCounter(app->renderer, MAIN_FONT_PATH, 16, 7.0f);
 
-    app->fpsCounter->setAppContext(app);
-    app->fpsCounter->update();
+    bool showFps = settingsManager->getSetting<bool>("showFps", true);
+    bool showDebug = settingsManager->getSetting<bool>("showDebug", false);
 
-    app->debugInfo = new DebugInfo(app->renderer, MAIN_FONT_PATH, 16, 30.0f);
-    app->debugInfo->setAppContext(app);
+    if (showFps) {
+        app->fpsCounter = new FPSCounter(app->renderer, MAIN_FONT_PATH, 16, 7.0f);
 
-    app->debugInfo->setYPosition(app->fpsCounter->getYPosition() + app->fpsCounter->getHeight() + 5.0f);
-    app->debugInfo->update();
+        app->fpsCounter->setAppContext(app);
+        app->fpsCounter->update();
+    }
+    if (showDebug) {
+
+        app->debugInfo = new DebugInfo(app->renderer, MAIN_FONT_PATH, 16, 7.0f);
+        app->debugInfo->setAppContext(app);
+
+        FPSCounter* fpsCounter = app->fpsCounter;
+        if (fpsCounter) {
+            app->debugInfo->setYPosition(fpsCounter->getYPosition() + fpsCounter->getHeight() + 4.0f);
+        }
+        app->debugInfo->update();
+    }
 
     app->switchState = setState;
     app->settingsManager = settingsManager;
@@ -281,8 +292,9 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 
         if (app->debugInfo) {
             FPSCounter* fpsCounter = app->fpsCounter;
-            app->debugInfo->setYPosition(fpsCounter->getYPosition() + fpsCounter->getHeight() + 5.0f);
-
+            if (fpsCounter) {
+                app->debugInfo->setYPosition(fpsCounter->getYPosition() + fpsCounter->getHeight() + 4.0f);
+            }
             app->debugInfo->update();
         }
 
@@ -387,6 +399,9 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     auto *app = (AppContext *)appstate;
     if (app)
     {
+        app->settingsManager->saveSettings();
+        delete app->settingsManager;
+
         if (app->fpsCounter) {
             delete app->fpsCounter;
             app->fpsCounter = nullptr;

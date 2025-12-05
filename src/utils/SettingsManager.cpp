@@ -57,12 +57,41 @@ void SettingsManager::saveSettings() const
 }
 
 template <>
-std::string SettingsManager::getSetting<std::string>(const std::string &propertyName, const std::string &defaultValue) const
+void SettingsManager::setSetting<std::string>(const std::string &propertyName, const std::string &value) const
+{
+    settingConfig_[propertyName] = value;
+}
+
+template <>
+void SettingsManager::setSetting<bool>(const std::string &propertyName, const bool &value) const
+{
+    settingConfig_[propertyName] = value ? "true" : "false";
+}
+
+template <>
+std::string SettingsManager::getSetting<std::string>(const std::string &propertyName, const std::string &defaultValue) const 
 {
     auto it = settingConfig_.find(propertyName);
     if (it != settingConfig_.end())
     {
         return it->second;
     }
+
+    setSetting(propertyName, defaultValue);
+    return defaultValue;
+}
+
+template <>
+bool SettingsManager::getSetting<bool>(const std::string &propertyName, const bool &defaultValue) const
+{
+    auto it = settingConfig_.find(propertyName);
+    if (it != settingConfig_.end())
+    {
+        std::string val = it->second;
+        std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+        return (val == "true");
+    }
+
+    setSetting(propertyName, defaultValue);
     return defaultValue;
 }

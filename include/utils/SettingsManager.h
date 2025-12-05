@@ -17,6 +17,12 @@ public:
     ~SettingsManager() = default;
 
     template <typename T>
+    void setSetting(const std::string &propertyName, const T &value) const
+    {
+        settingConfig_[propertyName] = Utils::toString(value);
+    }
+
+    template <typename T>
     T getSetting(const std::string &propertyName, const T &defaultValue) const
     {
         auto it = settingConfig_.find(propertyName);
@@ -33,16 +39,25 @@ public:
                 GAME_LOG_WARN("Settings: Failed to fetch property '" + propertyName + "'. Using default value.");
             }
         }
+
+        setSetting(propertyName, defaultValue);
         return defaultValue;
     }
 
     void loadSettings();
     void saveSettings() const;
 private:
-    SettingsConfigMap settingConfig_;
+    mutable SettingsConfigMap settingConfig_;
 };
 
 template <>
 std::string SettingsManager::getSetting<std::string>(const std::string &propertyName, const std::string &defaultValue) const;
+template <>
+bool SettingsManager::getSetting<bool>(const std::string &propertyName, const bool &defaultValue) const;
+
+template <>
+void SettingsManager::setSetting<std::string>(const std::string &propertyName, const std::string &value) const;
+template <>
+void SettingsManager::setSetting<bool>(const std::string &propertyName, const bool &value) const;
 
 #endif

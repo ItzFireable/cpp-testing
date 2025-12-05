@@ -63,8 +63,13 @@ void PlayState::init(AppContext *appContext, void *payload)
     }
 
     DebugInfo* debugInfo = appContext->debugInfo;
-    conductorInfo_ = new ConductorInfo(renderer, MAIN_FONT_PATH, 16, debugInfo->getYPosition() + debugInfo->getHeight() + 7.0f);
+    conductorInfo_ = new ConductorInfo(renderer, MAIN_FONT_PATH, 16, 7.0f);
     conductorInfo_->setConductor(conductor_.get());
+
+    if (debugInfo)
+    {
+        conductorInfo_->setYPosition(debugInfo->getYPosition() + debugInfo->getHeight() + 8.0f);
+    }
 
     skinUtils_ = std::make_unique<SkinUtils>();
     skinUtils_->loadSkin("stars");
@@ -192,8 +197,10 @@ void PlayState::update(float deltaTime)
     if (conductorInfo_)
     {
         DebugInfo* debugInfo = appContext->debugInfo;
-        conductorInfo_->setYPosition(debugInfo->getYPosition() + debugInfo->getHeight() + 9.0f);
-        
+        if (debugInfo)
+        {
+            conductorInfo_->setYPosition(debugInfo->getYPosition() + debugInfo->getHeight() + 8.0f);
+        }
         conductorInfo_->update();
     }
 }

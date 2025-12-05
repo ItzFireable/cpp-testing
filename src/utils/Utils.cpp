@@ -65,6 +65,11 @@ namespace Utils
         return tokens;
     }
 
+    std::string toString(int value)
+    {
+        return std::to_string(value);
+    }
+
     std::string formatMemorySize(size_t bytes)
     {
         const char *sizes[] = {"B", "KB", "MB", "GB", "TB"};

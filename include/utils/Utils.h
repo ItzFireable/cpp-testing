@@ -18,6 +18,7 @@ namespace Utils {
 
     std::string readFile(const std::string& path);
     std::string formatMemorySize(size_t bytes);
+    std::string toString(int value);
 
     std::vector<std::string> getChartList();
     std::string getChartFile(const std::string& chartDirectory);

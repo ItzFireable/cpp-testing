@@ -15,7 +15,7 @@
 #include <unistd.h>
 #endif
 
-FPSCounter::FPSCounter(SDL_Renderer *renderer, const std::string &fontPath, int fontSize, float yPos = 7.0f)
+FPSCounter::FPSCounter(SDL_Renderer *renderer, const std::string &fontPath, int fontSize, float yPos = 6.0f)
 {
     textObject_ = new TextObject(renderer, fontPath, fontSize);
 
