@@ -1,1 +1,0 @@
-cmake -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=DEBUG -S . -B output -DCMAKE_CXX_FLAGS_DEBUG_INIT="-fsanitize-undefined-trap-on-error -fsanitize-trap=undefined -fsanitize=address"
