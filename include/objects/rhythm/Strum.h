@@ -26,6 +26,13 @@ public:
     void loadTexture(SDL_Renderer* renderer);
     void setRenderTexture(SDL_Texture* texture, bool ownedByStrum);
 
+    bool isPressed() const {
+        return isPressed_;
+    }
+    void setPressed(bool pressed) {
+        isPressed_ = pressed;
+    }
+
     int getColumn() const {
         return column_;
     }
@@ -55,6 +62,7 @@ public:
     }
 private:
     int column_ = 0;
+    bool isPressed_ = false;
     
     float x_ = 0.0f;
     float y_ = 0.0f;
@@ -67,8 +75,9 @@ private:
     float padding_right_ = 4.0f;
 
     SDL_Texture *strumTexture_ = nullptr;
-    bool textureIsOwned_ = true;
+    SDL_Texture *strumPressedTexture_ = nullptr;
 
+    std::map<SDL_Texture*, bool> ownedTextures_;
     Playfield* playfield_ = nullptr;
 };
 

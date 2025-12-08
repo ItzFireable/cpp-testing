@@ -5,23 +5,29 @@ Strum::Strum(float x, float y, float width, float height, int column)
     : x_(x), y_(y), width_(width), height_(height), strumTexture_(nullptr), column_(column) {}
 
 Strum::~Strum() {
-    if (textureIsOwned_ && strumTexture_) {
-        SDL_DestroyTexture(strumTexture_);
+    for (const auto& pair : ownedTextures_) {
+        if (pair.second && pair.first) {
+            SDL_DestroyTexture(pair.first);
+        }
     }
 }
 
 void Strum::setRenderTexture(SDL_Texture* texture, bool ownedByStrum) {
-    if (textureIsOwned_ && strumTexture_ && texture != strumTexture_) {
-        SDL_DestroyTexture(strumTexture_);
+    for (const auto& pair : ownedTextures_) {
+        if (pair.second && pair.first) {
+            SDL_DestroyTexture(pair.first);
+        }
     }
     
     strumTexture_ = texture;
-    textureIsOwned_ = ownedByStrum;
+    ownedTextures_[texture] = ownedByStrum;
 }
 
 void Strum::loadTexture(SDL_Renderer* renderer) {
-    if (textureIsOwned_ && strumTexture_) {
-        SDL_DestroyTexture(strumTexture_);
+    for (const auto& pair : ownedTextures_) {
+        if (pair.second && pair.first) {
+            SDL_DestroyTexture(pair.first);
+        }
     }
 
     Playfield* playfield = getPlayfield();
@@ -31,12 +37,19 @@ void Strum::loadTexture(SDL_Renderer* renderer) {
     if (!skinUtils) return;
 
     std::string filePath = skinUtils->getFilePathForSkinElement("notes/strum");
+    std::string pressedFilePath = skinUtils->getFilePathForSkinElement("notes/strumPress");
     
     strumTexture_ = IMG_LoadTexture(renderer, filePath.c_str());
-    textureIsOwned_ = true;
-    
+    ownedTextures_[strumTexture_] = true;
     if (!strumTexture_) {
         GAME_LOG_ERROR("Failed to load strum texture from " + filePath);
+    }
+
+    strumPressedTexture_ = IMG_LoadTexture(renderer, pressedFilePath.c_str());
+    ownedTextures_[strumPressedTexture_] = true;
+
+    if (!strumPressedTexture_) {
+        GAME_LOG_ERROR("Failed to load strum pressed texture from " + pressedFilePath);
     }
 }
 
@@ -60,6 +73,8 @@ void Strum::setPadding(float top, float bottom, float left, float right) {
 void Strum::update(float deltaTime) {}
 
 void Strum::render(SDL_Renderer* renderer) {
+    SDL_Texture* textureToRender = isPressed_ && strumPressedTexture_ ? strumPressedTexture_ : strumTexture_;
+
     SDL_FRect strumRect = {
         x_ + padding_left_,
         y_ + padding_top_,
@@ -67,8 +82,8 @@ void Strum::render(SDL_Renderer* renderer) {
         height_ - padding_top_ - padding_bottom_
     };
     
-    if (strumTexture_) {
-        SDL_RenderTexture(renderer, strumTexture_, NULL, &strumRect);
+    if (textureToRender) {
+        SDL_RenderTexture(renderer, textureToRender, NULL, &strumRect);
     } else {
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         SDL_RenderRect(renderer, &strumRect);

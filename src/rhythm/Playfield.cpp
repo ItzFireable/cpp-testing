@@ -229,6 +229,8 @@ void Playfield::handleKeyPress(int column) {
     if (keysPressed_.find(column) != keysPressed_.end() && keysPressed_[column]) return;
     
     keysPressed_[column] = true;
+    strums_[column]->setPressed(true);
+
     float currentTime = conductor_->getSongPosition();
     float maxWindowMs = judgementSystem_->getMaxMissWindowMs();
     
@@ -297,6 +299,8 @@ void Playfield::handleKeyRelease(int column) {
     if (keysPressed_.find(column) == keysPressed_.end() || !keysPressed_[column]) return;
     
     keysPressed_[column] = false;
+    strums_[column]->setPressed(false);
+
     float currentTime = conductor_->getSongPosition();
     
     for (size_t i = 0; i < notes_.size(); ++i) {
